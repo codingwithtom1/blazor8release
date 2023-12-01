@@ -1,0 +1,118 @@
+﻿@page "/posts"
+@rendermode InteractiveWebAssembly
+@using Microsoft.AspNetCore.Authorization
+@implements IDisposable
+@inject PersistentComponentState ApplicationState
+@inject IPostService postservice
+@attribute [Authorize]
+<PageTitle>Posts</PageTitle>
+Client:@onclient
+<h1>Posts</h1>
+
+    <table class="table">
+        <thead>
+        <th>Id</th>
+        <th>Author</th>
+        <th>Create Date</th>
+        <th>Title</th>
+        <th>Description</th>
+        <th>Edit</th>
+        </thead>
+        <tbody>
+
+            @foreach (var post in posts)
+            {
+                <tr>
+                    <td>@post.Id</td>
+                    <td>@post.Author</td>
+                    <td>@post.CreatedDate</td>
+                    <td><input @bind="post.Title" /></td>
+                    <td><textarea @bind="post.Description"></textarea></td>
+                    <td>
+                        <button disabled="@buttonsdisabled" @onclick="@(e=>OnClickUpdate(post))">Update</button>
+                        <button disabled="@buttonsdisabled" @onclick="@(e=>OnClickDelete(post))">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div>
+    <div>Title</div>
+    <div><input @bind="title"/></div>
+    <div>Description</div>
+    <div><textarea @bind="description" /></div>
+    <div><button disabled="@buttonsdisabled" @onclick="OnClickAdd">Add</button></div>
+    </div>
+
+
+@code {
+
+    private PersistingComponentStateSubscription persistingSubscription;
+
+    private bool onclient = false;
+    private bool buttonsdisabled = true;
+    private string description = "";
+    private string title = "";
+    private List<PostDTO> posts = new List<PostDTO>();
+
+
+    private async Task OnClickDelete(PostDTO post)
+    {
+        await postservice.DeletePostAsync(post.Id);
+        posts = await postservice.GetPostsAsync();
+    }
+
+    private async Task OnClickUpdate(PostDTO post)
+    {
+        await postservice.UpdatePostAsync(post);
+    }
+
+    private async Task OnClickAdd()
+    {
+        PostDTO newpost = new PostDTO();
+        newpost.Title = title;
+        newpost.Description = description;
+        string id = await postservice.AddPostAsync(newpost);
+        posts = await postservice.GetPostsAsync();
+    }
+    private Task PersistPosts()
+    {
+        ApplicationState.PersistAsJson("posts", posts);
+
+        return Task.CompletedTask;
+    }
+    void IDisposable.Dispose()
+    {
+        persistingSubscription.Dispose();
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        persistingSubscription =
+            ApplicationState.RegisterOnPersisting(PersistPosts);
+
+
+
+        if (!ApplicationState.TryTakeFromJson<List<PostDTO>>(
+            "posts", out var restoredposts))
+        {
+            posts = await postservice.GetPostsAsync();
+
+        }
+        else
+        {
+            posts = restoredposts!;
+
+        }
+        onclient = postservice.OnClient();
+        buttonsdisabled = !onclient;
+
+        
+
+        
+    }
+
+
+}
